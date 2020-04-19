@@ -41,6 +41,12 @@
 #define DHT_GPIO 5 // D1 pin
 //******
 
+// fotosensor
+#define GPIO_INPUT_IO_0     4 
+#define GPIO_INPUT_PIN_SEL  (1ULL<<GPIO_INPUT_IO_0) 
+volatile uint8_t status = 0; 
+//*******
+
 /* FreeRTOS event group to signal when we are connected & ready to make a request */
 static EventGroupHandle_t wifi_event_group;
 
@@ -235,7 +241,7 @@ static void mqtt_client_thread(void *pvParameters)
 
             // send temperature and humidity
             if (dht_read_data(DHT_TYPE_DHT11, DHT_GPIO, &humidity, &temperature) == ESP_OK) {
-                sprintf(payload, "Humidity: %d Temperature: %d\n", humidity, temperature);
+                sprintf(payload, "Humidity: %d Temperature: %d Dark: %d\n", humidity, temperature, gpio_get_level(GPIO_INPUT_IO_0));
                 // printf("Humidity: %d Temperature: %d\n", humidity, temperature);
             } else {
                 sprintf(payload,"Fail to get dht temperature data\n");
@@ -280,6 +286,14 @@ void app_main(void)
     // initialize humidity and temperature meter
     ESP_ERROR_CHECK(dht_init(DHT_GPIO, false));
     //*****
+
+    // fotosenzor
+    gpio_config_t io_conf1; 
+    io_conf1.intr_type = GPIO_INTR_ANYEDGE; 
+    io_conf1.pin_bit_mask = GPIO_INPUT_PIN_SEL; 
+    io_conf1.mode = GPIO_MODE_INPUT; 
+    io_conf1.pull_up_en = 1; 
+    gpio_config(&io_conf1); 
 
     // Initialize NVS
     esp_err_t ret = nvs_flash_init();
