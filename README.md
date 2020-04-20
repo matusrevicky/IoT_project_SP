@@ -7,7 +7,7 @@ This project features fully functional ESP8266 MQTT Client together with
 * Remote control of LED diode HLMP-4000-002, 
 * Servo SG90 (using PWM), 
 * Water sensor (using adc)
-* Fotoresistor PGM5526
+* Photoresistor PGM5526
 * 2x resistor 270R 
 
 Pins used:
@@ -15,13 +15,13 @@ Pins used:
 * LED - 14, 15, GND
 * Servo - 5V, GND, 2
 * Water sensor - ADC, 5V, GND
-* Fotoresistor - GND, 4
+* Photoresistor - GND, 4
 
 ### Example
-Testing setup
+Testing setup photo
 ![Sample photo](animation/sample_photo.jpg)
 
-View sample video [sample_usage.mp4](animation/sample_usage.mp4)
+View sample video, example usage of LED diode control using mqtt, servo moves when photoresistor measures dark [sample_usage.mp4](animation/sample_usage.mp4)
 
 ## 2. Configuration
 * export `IDF_PATH`
