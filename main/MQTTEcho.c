@@ -30,6 +30,33 @@
 
 #include "MQTTClient.h"
 
+// water sensor, adc
+#include "driver/adc.h"
+
+
+// servo
+#include "esp8266/gpio_register.h" 
+#include "esp8266/pin_mux_register.h" 
+#include "driver/pwm.h" 
+#define PWM_0_SERVO    2 
+#define PWM_PINS_NUM   1 
+
+// period lenght 20ms = 20000us
+#define PWM_PERIOD    (20000) 
+
+const uint32_t pin_num[PWM_PINS_NUM] = { 
+    PWM_0_SERVO,
+}; 
+  
+uint32_t duties[PWM_PINS_NUM] = { 
+    0,
+}; 
+
+int16_t phase[PWM_PINS_NUM] = { 
+    0,
+}; 
+//*******
+
 // necesary for diode
 #include "driver/gpio.h" 
 #define LED_RED_PIN            14 
@@ -38,7 +65,7 @@
 
 // temperature and humidity meter
 #include <dht/dht.h>
-#define DHT_GPIO 5 // D1 pin
+#define DHT_GPIO 5 
 //******
 
 // fotosensor
@@ -116,22 +143,17 @@ static void messageArrived(MessageData *data)
 {
     ESP_LOGI(TAG, "Message arrived[len:%u]: %.*s", \
            data->message->payloadlen, data->message->payloadlen, (char *)data->message->payload);
-    
 
     char message_croped[(data->message->payloadlen)+1];
     strncpy(message_croped, (char *)data->message->payload, data->message->payloadlen);
     message_croped[(data->message->payloadlen)]='\0';
 
-    //ESP_LOGI(TAG,"prisla sparava %s", message_croped);
-
     if(strcmp(message_croped,"1")==0){
-        //ESP_LOGI(TAG,"prisla sparava 1");
         gpio_set_level(LED_GRN_PIN, 1);
         gpio_set_level(LED_RED_PIN, 0);
     }
 
     if(strcmp(message_croped,"2")==0){
-        //ESP_LOGI(TAG,"prisla sparava 2");
         gpio_set_level(LED_GRN_PIN, 0);
         gpio_set_level(LED_RED_PIN, 1);
     }
@@ -147,8 +169,9 @@ static void mqtt_client_thread(void *pvParameters)
     int rc = 0;
     char clientID[32] = {0};
     // uint32_t count = 0;
-    int16_t  humidity = 0;
-    int16_t  temperature = 0;
+    float  humidity = 0;
+    float  temperature = 0;
+    uint16_t adc_data[1];
 
     ESP_LOGI(TAG, "ssid:%s passwd:%s sub:%s qos:%u pub:%s qos:%u pubinterval:%u payloadsize:%u",
              CONFIG_WIFI_SSID, CONFIG_WIFI_PASSWORD, CONFIG_MQTT_SUB_TOPIC,
@@ -239,9 +262,21 @@ static void mqtt_client_thread(void *pvParameters)
             message.retained = 0;
             message.payload = payload;
 
-            // send temperature and humidity
-            if (dht_read_data(DHT_TYPE_DHT11, DHT_GPIO, &humidity, &temperature) == ESP_OK) {
-                sprintf(payload, "Humidity: %d Temperature: %d Dark: %d\n", humidity, temperature, gpio_get_level(GPIO_INPUT_IO_0));
+            // check light and rotate servo, if gets dark close something
+            if(gpio_get_level(GPIO_INPUT_IO_0)==0){
+                duties[0] = 1000; // duty 1ms
+                pwm_set_duties(duties); 
+                pwm_start();
+            } else {
+                duties[0] = 2000; // duty 2ms
+                pwm_set_duties(duties); 
+                pwm_start();
+            }
+
+
+            // send temperature and humidity and read water sensor
+            if (dht_read_float_data(DHT_TYPE_DHT11, DHT_GPIO, &humidity, &temperature) == ESP_OK && ESP_OK == adc_read(&adc_data[0])) {
+                sprintf(payload, "{\"Humidity\": %f, \"Temperature\": %f, \"Dark\": %d, \"Water_Level\": %d}", humidity, temperature, gpio_get_level(GPIO_INPUT_IO_0), adc_data[0]);
                 // printf("Humidity: %d Temperature: %d\n", humidity, temperature);
             } else {
                 sprintf(payload,"Fail to get dht temperature data\n");
@@ -272,6 +307,31 @@ static void mqtt_client_thread(void *pvParameters)
 
 void app_main(void)
 {
+
+    // 1. init adc
+    adc_config_t adc_config;
+
+    // Depend on menuconfig->Component config->PHY->vdd33_const value
+    // When measuring system voltage(ADC_READ_VDD_MODE), vdd33_const must be set to 255.
+    adc_config.mode = ADC_READ_TOUT_MODE;
+    adc_config.clk_div = 8; // ADC sample collection clock = 80MHz/clk_div = 10MHz
+    ESP_ERROR_CHECK(adc_init(&adc_config));
+
+    // servo
+    pwm_init(PWM_PERIOD, duties, PWM_PINS_NUM, pin_num); 
+    pwm_set_phases(phase); 
+    pwm_start(); 
+
+    // for (uint8_t i=0; i<13; i++) { 
+    //         duties[0] = 700+i*100;
+    //         pwm_set_duties(duties); 
+    //         pwm_start(); 
+    //         ESP_LOGI(TAG, "STEP: %d \n", i); 
+    //         vTaskDelay(5000 / portTICK_RATE_MS); 
+
+    //     }
+
+    //*******
 
     // LED diode config
     gpio_config_t io_conf; 
