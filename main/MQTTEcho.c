@@ -30,19 +30,16 @@
 
 #include "MQTTClient.h"
 
-// water sensor, adc
-#include "driver/adc.h"
+#include "functions.h"
 
 
-// servo
-#include "esp8266/gpio_register.h" 
-#include "esp8266/pin_mux_register.h" 
-#include "driver/pwm.h" 
-#define PWM_0_SERVO    2 
-#define PWM_PINS_NUM   1 
+/* FreeRTOS event group to signal when we are connected & ready to make a request */
+static EventGroupHandle_t wifi_event_group;
 
-// period lenght 20ms = 20000us
-#define PWM_PERIOD    (20000) 
+/* The event group allows multiple bits for each event,
+   but we only care about one event - are we connected
+   to the AP with an IP? */
+const int CONNECTED_BIT = BIT0;
 
 const uint32_t pin_num[PWM_PINS_NUM] = { 
     PWM_0_SERVO,
@@ -55,38 +52,19 @@ uint32_t duties[PWM_PINS_NUM] = {
 int16_t phase[PWM_PINS_NUM] = { 
     0,
 }; 
-//*******
 
-// necesary for diode
-#include "driver/gpio.h" 
-#define LED_RED_PIN            14 
-#define LED_GRN_PIN            15 
-//******
-
-// temperature and humidity meter
-#include <dht/dht.h>
-#define DHT_GPIO 5 
-//******
-
-// fotosensor
-#define GPIO_INPUT_IO_0     4 
-#define GPIO_INPUT_PIN_SEL  (1ULL<<GPIO_INPUT_IO_0) 
 volatile uint8_t status = 0; 
-//*******
-
-/* FreeRTOS event group to signal when we are connected & ready to make a request */
-static EventGroupHandle_t wifi_event_group;
-
-/* The event group allows multiple bits for each event,
-   but we only care about one event - are we connected
-   to the AP with an IP? */
-const int CONNECTED_BIT = BIT0;
-
-#define MQTT_CLIENT_THREAD_NAME         "mqtt_client_thread"
-#define MQTT_CLIENT_THREAD_STACK_WORDS  4096
-#define MQTT_CLIENT_THREAD_PRIO         8
 
 static const char *TAG = "example";
+
+//**********************************************************************
+extern uint16_t system_adc_read(void);
+
+static SemaphoreHandle_t water_sem; 
+static uint16_t water;
+
+//**********************************************************************
+
 
 static esp_err_t event_handler(void *ctx, system_event_t *event)
 {
@@ -171,7 +149,6 @@ static void mqtt_client_thread(void *pvParameters)
     // uint32_t count = 0;
     float  humidity = 0;
     float  temperature = 0;
-    uint16_t adc_data[1];
 
     ESP_LOGI(TAG, "ssid:%s passwd:%s sub:%s qos:%u pub:%s qos:%u pubinterval:%u payloadsize:%u",
              CONFIG_WIFI_SSID, CONFIG_WIFI_PASSWORD, CONFIG_MQTT_SUB_TOPIC,
@@ -275,9 +252,15 @@ static void mqtt_client_thread(void *pvParameters)
 
 
             // send temperature and humidity and read water sensor
-            if (dht_read_float_data(DHT_TYPE_DHT11, DHT_GPIO, &humidity, &temperature) == ESP_OK && ESP_OK == adc_read(&adc_data[0])) {
-                sprintf(payload, "{\"Humidity\": %f, \"Temperature\": %f, \"Dark\": %d, \"Water_Level\": %d}", humidity, temperature, gpio_get_level(GPIO_INPUT_IO_0), adc_data[0]);
-                // printf("Humidity: %d Temperature: %d\n", humidity, temperature);
+            xSemaphoreTake(water_sem, portMAX_DELAY);
+            uint16_t a_water = water;
+            xSemaphoreGive(water_sem);
+
+
+            if (dht_read_float_data(DHT_TYPE_DHT11, DHT_GPIO, &humidity, &temperature) == ESP_OK ) {
+                ESP_LOGI(TAG, "{\"Humidity\": %f, \"Temperature\": %f, \"Dark\": %d, \"Water_Level\": %d}", humidity, temperature, gpio_get_level(GPIO_INPUT_IO_0), a_water);
+                sprintf(payload, "{\"Humidity\": %f, \"Temperature\": %f, \"Dark\": %d, \"Water_Level\": %d}", humidity, temperature, gpio_get_level(GPIO_INPUT_IO_0), a_water);
+                //printf("{\"Humidity\": %f, \"Temperature\": %f, \"Dark\": %d, \"Water_Level\": %d}", humidity, temperature, gpio_get_level(GPIO_INPUT_IO_0), a_water);
             } else {
                 sprintf(payload,"Fail to get dht temperature data\n");
             }
@@ -305,67 +288,47 @@ static void mqtt_client_thread(void *pvParameters)
     return;
 }
 
+//********************************************************
+static void water_task(void *pvParameters) 
+{ 
+    while (1) {
+		xSemaphoreTake(water_sem, portMAX_DELAY);
+        water = system_adc_read();
+        xSemaphoreGive(water_sem);
+        ESP_LOGI(TAG, "WATER sensor: %u \n", water);
+		vTaskDelay(5000 / portTICK_RATE_MS);
+    }    
+    vTaskDelete(NULL);
+}
+
+//********************************************************
 void app_main(void)
 {
 
-    // 1. init adc
-    adc_config_t adc_config;
-
-    // Depend on menuconfig->Component config->PHY->vdd33_const value
-    // When measuring system voltage(ADC_READ_VDD_MODE), vdd33_const must be set to 255.
-    adc_config.mode = ADC_READ_TOUT_MODE;
-    adc_config.clk_div = 8; // ADC sample collection clock = 80MHz/clk_div = 10MHz
-    ESP_ERROR_CHECK(adc_init(&adc_config));
+    initialize_led_gpio();
+    initialize_watersensor_adc();
+    initialize_fotosensor_gpio();
+    dht_init(DHT_GPIO, false);
 
     // servo
     pwm_init(PWM_PERIOD, duties, PWM_PINS_NUM, pin_num); 
     pwm_set_phases(phase); 
     pwm_start(); 
 
-    // for (uint8_t i=0; i<13; i++) { 
-    //         duties[0] = 700+i*100;
-    //         pwm_set_duties(duties); 
-    //         pwm_start(); 
-    //         ESP_LOGI(TAG, "STEP: %d \n", i); 
-    //         vTaskDelay(5000 / portTICK_RATE_MS); 
-
-    //     }
-
-    //*******
-
-    // LED diode config
-    gpio_config_t io_conf; 
-    io_conf.intr_type = GPIO_INTR_DISABLE; 
-    io_conf.mode = GPIO_MODE_OUTPUT; 
-    io_conf.pin_bit_mask = ((1ULL << LED_GRN_PIN) | (1ULL << LED_RED_PIN)); 
-    io_conf.pull_down_en = 0; 
-    io_conf.pull_up_en = 0; 
-    gpio_config(&io_conf);
-    //***** 
-
-    // initialize humidity and temperature meter
-    ESP_ERROR_CHECK(dht_init(DHT_GPIO, false));
-    //*****
-
-    // fotosenzor
-    gpio_config_t io_conf1; 
-    io_conf1.intr_type = GPIO_INTR_ANYEDGE; 
-    io_conf1.pin_bit_mask = GPIO_INPUT_PIN_SEL; 
-    io_conf1.mode = GPIO_MODE_INPUT; 
-    io_conf1.pull_up_en = 1; 
-    gpio_config(&io_conf1); 
-
     // Initialize NVS
     esp_err_t ret = nvs_flash_init();
-
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES) {
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
-
     ESP_ERROR_CHECK(ret);
 
     initialise_wifi();
+
+
+    water_sem = xSemaphoreCreateBinary();
+    xSemaphoreGive(water_sem); 
+    xTaskCreate(water_task, "water", 1024, NULL, 8, NULL);
 
     ret = xTaskCreate(&mqtt_client_thread,
                       MQTT_CLIENT_THREAD_NAME,
@@ -373,6 +336,7 @@ void app_main(void)
                       NULL,
                       MQTT_CLIENT_THREAD_PRIO,
                       NULL);
+
 
     if (ret != pdPASS)  {
         ESP_LOGE(TAG, "mqtt create client thread %s failed", MQTT_CLIENT_THREAD_NAME);
