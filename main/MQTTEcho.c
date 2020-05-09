@@ -29,8 +29,42 @@
 #include "freertos/event_groups.h"
 
 #include "MQTTClient.h"
+#include "esp_ota_ops.h"
+
+////
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <math.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/queue.h"
+#include "freertos/event_groups.h"
+
+#include "driver/gpio.h"
+#include "driver/i2c.h"
+#include "driver/hw_timer.h"
+
+#include "esp_log.h"
+#include "esp_system.h"
+#include "esp_wifi.h"
+#include "esp_event_loop.h"
+#include "esp_err.h"
+
+#include "nvs.h"
+#include "nvs_flash.h"
+
+////
 
 #include "functions.h"
+
+#define CONF_OTA_SERVER_IP      CONFIG_MODULE_OTA_SERVER_IP
+#define CONF_OTA_SERVER_PORT    CONFIG_MODULE_OTA_SERVER_PORT
+
+#define ACTUAL_FW_VERSION        6
+#define OTA_LOOP_COUNT          90
 
 /* FreeRTOS event group to signal when we are connected & ready to make a request */
 static EventGroupHandle_t wifi_event_group;
@@ -54,7 +88,7 @@ int16_t phase[PWM_PINS_NUM] = {
 
 volatile uint8_t status = 0;
 
-static const char *TAG = "example";
+static const char *TAG = "mqtt_client_test";
 
 //**********************************************************************
 extern uint16_t system_adc_read(void);
@@ -123,22 +157,29 @@ static void messageArrived(MessageData *data)
     ESP_LOGI(TAG, "Message arrived[len:%u]: %.*s",
              data->message->payloadlen, data->message->payloadlen, (char *)data->message->payload);
 
-    char message_croped[(data->message->payloadlen) + 1];
-    strncpy(message_croped, (char *)data->message->payload, data->message->payloadlen);
-    message_croped[(data->message->payloadlen)] = '\0';
-
-    if (strcmp(message_croped, "1") == 0)
+    if (strncmp((char *)data->message->payload, "1", 1) == 0)
     {
+        ESP_LOGI(TAG, "LED GREEN ON"); 
         gpio_set_level(LED_GRN_PIN, 1);
-        gpio_set_level(LED_RED_PIN, 0);
     }
-
-    if (strcmp(message_croped, "2") == 0)
+    if (strncmp((char *)data->message->payload, "2", 1) == 0)
     {
-        gpio_set_level(LED_GRN_PIN, 0);
+        ESP_LOGI(TAG, "LED RED ON"); 
         gpio_set_level(LED_RED_PIN, 1);
     }
+    if (strncmp((char *)data->message->payload, "3", 1) == 0)
+    {
+        ESP_LOGI(TAG, "LED GREEN OFF"); 
+        gpio_set_level(LED_GRN_PIN, 0);
+    }
+    if (strncmp((char *)data->message->payload, "4", 1) == 0)
+    {
+        ESP_LOGI(TAG, "LED RED OFF"); 
+        gpio_set_level(LED_RED_PIN, 0);
+    }
 }
+
+//********************************************************
 
 static void mqtt_client_thread(void *pvParameters)
 {
@@ -147,6 +188,7 @@ static void mqtt_client_thread(void *pvParameters)
     Network network;
     int rc = 0;
     char clientID[32] = {0};
+    uint16_t loop_counter = OTA_LOOP_COUNT;
 
     ESP_LOGI(TAG, "ssid:%s passwd:%s sub:%s qos:%u pub:%s qos:%u pubinterval:%u payloadsize:%u",
              CONFIG_WIFI_SSID, CONFIG_WIFI_PASSWORD, CONFIG_MQTT_SUB_TOPIC,
@@ -297,6 +339,19 @@ static void mqtt_client_thread(void *pvParameters)
                 break;
             }
 
+            // ota start
+            if (loop_counter == OTA_LOOP_COUNT)
+            {
+                loop_counter = 0;
+                do_ota(CONF_OTA_SERVER_IP, CONF_OTA_SERVER_PORT, ACTUAL_FW_VERSION);
+            }
+            else
+            {
+                ESP_LOGI(TAG, "OTA update: %u/%u \n", loop_counter, (uint16_t)OTA_LOOP_COUNT);
+            }
+            loop_counter++;
+            //ota end
+
             vTaskDelay(CONFIG_MQTT_PUBLISH_INTERVAL / portTICK_RATE_MS);
         }
 
@@ -308,7 +363,6 @@ static void mqtt_client_thread(void *pvParameters)
     return;
 }
 
-//********************************************************
 static void dark_task(void *pvParameters)
 {
     while (1)
@@ -316,7 +370,7 @@ static void dark_task(void *pvParameters)
         xSemaphoreTake(dark_sem, portMAX_DELAY);
         dark = gpio_get_level(GPIO_INPUT_IO_0);
         xSemaphoreGive(dark_sem);
-        ESP_LOGI(TAG, "Fotosensor sensor: %d \n", dark);
+        ESP_LOGI(TAG, "Fotosensor sensor: %d ", dark);
         vTaskDelay((CONFIG_MQTT_PUBLISH_INTERVAL) / portTICK_RATE_MS);
     }
     vTaskDelete(NULL);
@@ -329,7 +383,7 @@ static void water_task(void *pvParameters)
         xSemaphoreTake(water_sem, portMAX_DELAY);
         water = system_adc_read();
         xSemaphoreGive(water_sem);
-        ESP_LOGI(TAG, "WATER sensor: %u \n", water);
+        ESP_LOGI(TAG, "WATER sensor: %u", water);
         vTaskDelay((CONFIG_MQTT_PUBLISH_INTERVAL) / portTICK_RATE_MS);
     }
     vTaskDelete(NULL);

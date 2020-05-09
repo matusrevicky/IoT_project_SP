@@ -90,4 +90,16 @@ config MQTT_PAYLOAD_BUFFER
         1460~2048 is recommended.
         MQTT payload size.
 
+config MODULE_OTA_SERVER_IP
+    string "Update (OTA) HTTP server IP"
+    default ""
+    help
+        IP of the OTA HTTP server.
+
+config MODULE_OTA_SERVER_PORT
+    string "Update (OTA) HTTP server port"
+    default "80"
+    help
+        Port of the OTA HTTP server.
+
 endmenu
