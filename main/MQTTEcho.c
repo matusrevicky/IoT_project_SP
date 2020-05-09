@@ -32,7 +32,6 @@
 
 #include "functions.h"
 
-
 /* FreeRTOS event group to signal when we are connected & ready to make a request */
 static EventGroupHandle_t wifi_event_group;
 
@@ -41,37 +40,38 @@ static EventGroupHandle_t wifi_event_group;
    to the AP with an IP? */
 const int CONNECTED_BIT = BIT0;
 
-const uint32_t pin_num[PWM_PINS_NUM] = { 
+const uint32_t pin_num[PWM_PINS_NUM] = {
     PWM_0_SERVO,
-}; 
-  
-uint32_t duties[PWM_PINS_NUM] = { 
-    0,
-}; 
+};
 
-int16_t phase[PWM_PINS_NUM] = { 
+uint32_t duties[PWM_PINS_NUM] = {
     0,
-}; 
+};
 
-volatile uint8_t status = 0; 
+int16_t phase[PWM_PINS_NUM] = {
+    0,
+};
+
+volatile uint8_t status = 0;
 
 static const char *TAG = "example";
 
 //**********************************************************************
 extern uint16_t system_adc_read(void);
 
-static SemaphoreHandle_t water_sem; 
+static SemaphoreHandle_t water_sem, temp_sem, dark_sem;
 static uint16_t water;
+static int16_t humidity, temperature, dark;
 
 //**********************************************************************
-
 
 static esp_err_t event_handler(void *ctx, system_event_t *event)
 {
     /* For accessing reason codes in case of disconnection */
     system_event_info_t *info = &event->event_info;
 
-    switch (event->event_id) {
+    switch (event->event_id)
+    {
     case SYSTEM_EVENT_STA_START:
         esp_wifi_connect();
         break;
@@ -82,7 +82,8 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
 
     case SYSTEM_EVENT_STA_DISCONNECTED:
         ESP_LOGE(TAG, "Disconnect reason : %d", info->disconnected.reason);
-        if (info->disconnected.reason == WIFI_REASON_BASIC_RATE_NOT_SUPPORT) {
+        if (info->disconnected.reason == WIFI_REASON_BASIC_RATE_NOT_SUPPORT)
+        {
             /*Switch to 802.11 bgn mode */
             esp_wifi_set_protocol(ESP_IF_WIFI_STA, WIFI_PROTOCAL_11B | WIFI_PROTOCAL_11G | WIFI_PROTOCAL_11N);
         }
@@ -119,24 +120,24 @@ static void initialise_wifi(void)
 
 static void messageArrived(MessageData *data)
 {
-    ESP_LOGI(TAG, "Message arrived[len:%u]: %.*s", \
-           data->message->payloadlen, data->message->payloadlen, (char *)data->message->payload);
+    ESP_LOGI(TAG, "Message arrived[len:%u]: %.*s",
+             data->message->payloadlen, data->message->payloadlen, (char *)data->message->payload);
 
-    char message_croped[(data->message->payloadlen)+1];
+    char message_croped[(data->message->payloadlen) + 1];
     strncpy(message_croped, (char *)data->message->payload, data->message->payloadlen);
-    message_croped[(data->message->payloadlen)]='\0';
+    message_croped[(data->message->payloadlen)] = '\0';
 
-    if(strcmp(message_croped,"1")==0){
+    if (strcmp(message_croped, "1") == 0)
+    {
         gpio_set_level(LED_GRN_PIN, 1);
         gpio_set_level(LED_RED_PIN, 0);
     }
 
-    if(strcmp(message_croped,"2")==0){
+    if (strcmp(message_croped, "2") == 0)
+    {
         gpio_set_level(LED_GRN_PIN, 0);
         gpio_set_level(LED_RED_PIN, 1);
     }
- 
-    
 }
 
 static void mqtt_client_thread(void *pvParameters)
@@ -146,9 +147,6 @@ static void mqtt_client_thread(void *pvParameters)
     Network network;
     int rc = 0;
     char clientID[32] = {0};
-    // uint32_t count = 0;
-    float  humidity = 0;
-    float  temperature = 0;
 
     ESP_LOGI(TAG, "ssid:%s passwd:%s sub:%s qos:%u pub:%s qos:%u pubinterval:%u payloadsize:%u",
              CONFIG_WIFI_SSID, CONFIG_WIFI_PASSWORD, CONFIG_MQTT_SUB_TOPIC,
@@ -170,24 +168,30 @@ static void mqtt_client_thread(void *pvParameters)
 
     NetworkInit(&network);
 
-    if (MQTTClientInit(&client, &network, 0, NULL, 0, NULL, 0) == false) {
+    if (MQTTClientInit(&client, &network, 0, NULL, 0, NULL, 0) == false)
+    {
         ESP_LOGE(TAG, "mqtt init err");
         vTaskDelete(NULL);
     }
 
     payload = malloc(CONFIG_MQTT_PAYLOAD_BUFFER);
 
-    if (!payload) {
+    if (!payload)
+    {
         ESP_LOGE(TAG, "mqtt malloc err");
-    } else {
+    }
+    else
+    {
         memset(payload, 0x0, CONFIG_MQTT_PAYLOAD_BUFFER);
     }
 
-    for (;;) {
+    for (;;)
+    {
         ESP_LOGI(TAG, "wait wifi connect...");
         xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, false, true, portMAX_DELAY);
 
-        if ((rc = NetworkConnect(&network, CONFIG_MQTT_BROKER, CONFIG_MQTT_PORT)) != 0) {
+        if ((rc = NetworkConnect(&network, CONFIG_MQTT_BROKER, CONFIG_MQTT_PORT)) != 0)
+        {
             ESP_LOGE(TAG, "Return code from network connect is %d", rc);
             continue;
         }
@@ -206,7 +210,8 @@ static void mqtt_client_thread(void *pvParameters)
 
         ESP_LOGI(TAG, "MQTT Connecting");
 
-        if ((rc = MQTTConnect(&client, &connectData)) != 0) {
+        if ((rc = MQTTConnect(&client, &connectData)) != 0)
+        {
             ESP_LOGE(TAG, "Return code from MQTT connect is %d", rc);
             network.disconnect(&network);
             continue;
@@ -216,15 +221,19 @@ static void mqtt_client_thread(void *pvParameters)
 
 #if defined(MQTT_TASK)
 
-        if ((rc = MQTTStartTask(&client)) != pdPASS) {
+        if ((rc = MQTTStartTask(&client)) != pdPASS)
+        {
             ESP_LOGE(TAG, "Return code from start tasks is %d", rc);
-        } else {
+        }
+        else
+        {
             ESP_LOGI(TAG, "Use MQTTStartTask");
         }
 
 #endif
 
-        if ((rc = MQTTSubscribe(&client, CONFIG_MQTT_SUB_TOPIC, CONFIG_DEFAULT_MQTT_SUB_QOS, messageArrived)) != 0) {
+        if ((rc = MQTTSubscribe(&client, CONFIG_MQTT_SUB_TOPIC, CONFIG_DEFAULT_MQTT_SUB_QOS, messageArrived)) != 0)
+        {
             ESP_LOGE(TAG, "Return code from MQTT subscribe is %d", rc);
             network.disconnect(&network);
             continue;
@@ -232,7 +241,8 @@ static void mqtt_client_thread(void *pvParameters)
 
         ESP_LOGI(TAG, "MQTT subscribe to topic %s OK", CONFIG_MQTT_SUB_TOPIC);
 
-        for (;;) {
+        for (;;)
+        {
             MQTTMessage message;
 
             message.qos = CONFIG_DEFAULT_MQTT_PUB_QOS;
@@ -240,40 +250,50 @@ static void mqtt_client_thread(void *pvParameters)
             message.payload = payload;
 
             // check light and rotate servo, if gets dark close something
-            if(gpio_get_level(GPIO_INPUT_IO_0)==0){
+            xSemaphoreTake(dark_sem, portMAX_DELAY);
+            uint16_t a_dark = dark;
+            xSemaphoreGive(dark_sem);
+
+            if (a_dark == 0)
+            {
                 duties[0] = 1000; // duty 1ms
-                pwm_set_duties(duties); 
-                pwm_start();
-            } else {
-                duties[0] = 2000; // duty 2ms
-                pwm_set_duties(duties); 
+                pwm_set_duties(duties);
                 pwm_start();
             }
-
+            else
+            {
+                duties[0] = 2000; // duty 2ms
+                pwm_set_duties(duties);
+                pwm_start();
+            }
 
             // send temperature and humidity and read water sensor
             xSemaphoreTake(water_sem, portMAX_DELAY);
             uint16_t a_water = water;
             xSemaphoreGive(water_sem);
 
+            xSemaphoreTake(temp_sem, portMAX_DELAY);
+            int16_t a_temperature = temperature / 10;
+            int16_t a_humidity = humidity / 10;
+            xSemaphoreGive(temp_sem);
 
-            if (dht_read_float_data(DHT_TYPE_DHT11, DHT_GPIO, &humidity, &temperature) == ESP_OK ) {
-                ESP_LOGI(TAG, "{\"Humidity\": %f, \"Temperature\": %f, \"Dark\": %d, \"Water_Level\": %d}", humidity, temperature, gpio_get_level(GPIO_INPUT_IO_0), a_water);
-                sprintf(payload, "{\"Humidity\": %f, \"Temperature\": %f, \"Dark\": %d, \"Water_Level\": %d}", humidity, temperature, gpio_get_level(GPIO_INPUT_IO_0), a_water);
-                //printf("{\"Humidity\": %f, \"Temperature\": %f, \"Dark\": %d, \"Water_Level\": %d}", humidity, temperature, gpio_get_level(GPIO_INPUT_IO_0), a_water);
-            } else {
-                sprintf(payload,"Fail to get dht temperature data\n");
-            }
+            ESP_LOGI(TAG, "Sending {\"Humidity\": %d, \"Temperature\": %d, \"Dark\": %d, \"Water_Level\": %d}", a_humidity, a_temperature, a_dark, a_water);
+            sprintf(payload, "{\"Humidity\": %d, \"Temperature\": %d, \"Dark\": %d, \"Water_Level\": %d}", a_humidity, a_temperature, a_dark, a_water);
+
             message.payloadlen = strlen(payload);
             //******
 
-            if ((rc = MQTTPublish(&client, CONFIG_MQTT_PUB_TOPIC, &message)) != 0) {
+            if ((rc = MQTTPublish(&client, CONFIG_MQTT_PUB_TOPIC, &message)) != 0)
+            {
                 ESP_LOGE(TAG, "Return code from MQTT publish is %d", rc);
-            } else {
+            }
+            else
+            {
                 ESP_LOGI(TAG, "MQTT published topic %s, len:%u heap:%u", CONFIG_MQTT_PUB_TOPIC, message.payloadlen, esp_get_free_heap_size());
             }
 
-            if (rc != 0) {
+            if (rc != 0)
+            {
                 break;
             }
 
@@ -289,15 +309,43 @@ static void mqtt_client_thread(void *pvParameters)
 }
 
 //********************************************************
-static void water_task(void *pvParameters) 
-{ 
-    while (1) {
-		xSemaphoreTake(water_sem, portMAX_DELAY);
+static void dark_task(void *pvParameters)
+{
+    while (1)
+    {
+        xSemaphoreTake(dark_sem, portMAX_DELAY);
+        dark = gpio_get_level(GPIO_INPUT_IO_0);
+        xSemaphoreGive(dark_sem);
+        ESP_LOGI(TAG, "Fotosensor sensor: %d \n", dark);
+        vTaskDelay((CONFIG_MQTT_PUBLISH_INTERVAL) / portTICK_RATE_MS);
+    }
+    vTaskDelete(NULL);
+}
+
+static void water_task(void *pvParameters)
+{
+    while (1)
+    {
+        xSemaphoreTake(water_sem, portMAX_DELAY);
         water = system_adc_read();
         xSemaphoreGive(water_sem);
         ESP_LOGI(TAG, "WATER sensor: %u \n", water);
-		vTaskDelay(5000 / portTICK_RATE_MS);
-    }    
+        vTaskDelay((CONFIG_MQTT_PUBLISH_INTERVAL) / portTICK_RATE_MS);
+    }
+    vTaskDelete(NULL);
+}
+
+static void temp_humidity_task(void *pvParameters)
+{
+    while (1)
+    {
+        vTaskDelay((CONFIG_MQTT_PUBLISH_INTERVAL) / portTICK_RATE_MS);
+        xSemaphoreTake(temp_sem, portMAX_DELAY);
+        dht_read_data(DHT_TYPE_DHT11, DHT_GPIO, &humidity, &temperature);
+        xSemaphoreGive(temp_sem);
+        ESP_LOGI(TAG, "Temperature measured: %d st.C, Humidity: %d", temperature, humidity);
+        
+    }
     vTaskDelete(NULL);
 }
 
@@ -308,16 +356,17 @@ void app_main(void)
     initialize_led_gpio();
     initialize_watersensor_adc();
     initialize_fotosensor_gpio();
-    dht_init(DHT_GPIO, false);
+    dht_init(DHT_GPIO, true);
 
     // servo
-    pwm_init(PWM_PERIOD, duties, PWM_PINS_NUM, pin_num); 
-    pwm_set_phases(phase); 
-    pwm_start(); 
+    pwm_init(PWM_PERIOD, duties, PWM_PINS_NUM, pin_num);
+    pwm_set_phases(phase);
+    pwm_start();
 
     // Initialize NVS
     esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES) {
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES)
+    {
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
@@ -325,10 +374,18 @@ void app_main(void)
 
     initialise_wifi();
 
-
     water_sem = xSemaphoreCreateBinary();
-    xSemaphoreGive(water_sem); 
+    xSemaphoreGive(water_sem);
+
+    temp_sem = xSemaphoreCreateBinary();
+    xSemaphoreGive(temp_sem);
+
+    dark_sem = xSemaphoreCreateBinary();
+    xSemaphoreGive(dark_sem);
+
+    xTaskCreate(temp_humidity_task, "temperature", 1024, NULL, 8, NULL);
     xTaskCreate(water_task, "water", 1024, NULL, 8, NULL);
+    xTaskCreate(dark_task, "dark", 1024, NULL, 8, NULL);
 
     ret = xTaskCreate(&mqtt_client_thread,
                       MQTT_CLIENT_THREAD_NAME,
@@ -337,8 +394,8 @@ void app_main(void)
                       MQTT_CLIENT_THREAD_PRIO,
                       NULL);
 
-
-    if (ret != pdPASS)  {
+    if (ret != pdPASS)
+    {
         ESP_LOGE(TAG, "mqtt create client thread %s failed", MQTT_CLIENT_THREAD_NAME);
     }
 }

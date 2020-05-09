@@ -36,3 +36,16 @@ void initialize_fotosensor_gpio(void)
     gpio_config(&io_conf); 
 }
 
+char *get_device_id()
+{
+    uint8_t mac_addr[6];
+    char *id = (char*)malloc((sizeof(char)*(6*2))+1);
+    if (id == NULL) return NULL;
+
+    esp_read_mac(mac_addr, ESP_MAC_WIFI_STA);
+    for (int i=0; i<6; i++) {
+        snprintf(id+(i*2), 3, "%02X", mac_addr[i]);
+    }
+    return id;
+}
+
