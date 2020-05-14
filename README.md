@@ -17,6 +17,15 @@ Pins used:
 * Water sensor - ADC, 5V, GND
 * Photoresistor - GND, 4
 
+Technologies used:
+* MQTT broker: broker.hivemq.com (public broker)
+* ota update server ip: 158.197.31.20
+* android visualization tool: [IoT MQTT Panel](https://play.google.com/store/apps/details?id=snr.lab.iotmqttpanel.prod&hl=sk)
+
+
+### Getting started
+Reqiured: https://github.com/espressif/ESP8266_RTOS_SDK/tree/release/v3.3, xtensa-lx106-elf
+
 ### Example
 Testing setup photo
 ![Sample photo](animation/sample_photo.jpg)
@@ -27,6 +36,15 @@ View sample video, example usage of LED diode control using mqtt, servo moves wh
 * export `IDF_PATH`
 * `make menuconfig` -> `Example Configuration` to config your example
 * `make menuconfig` -> `Component config` -> `MQTT(Paho)` -> to config your MQTT parameters
+* `make menuconfig` -> `Partition Table` -> `two ota partitions` -> to be able to perform ota updates
+After configuring Partition table use `make erase_flash`.
+
+To use ota updates:
+* increase `ACTUAL_FW_VERSION`
+* `make ota`
+* copy `mqtt_demo.ota.bin` to ota update server
+* rename `mqtt_demo.ota.bin` to `update.bin`
+* increase Version number in file `VERSION`
 
 ## 3. Compiling & Execution
 

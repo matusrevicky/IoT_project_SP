@@ -14,48 +14,31 @@
 
 
 //
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <math.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/queue.h"
-#include "freertos/event_groups.h"
-
-#include "driver/gpio.h"
-#include "driver/i2c.h"
-#include "driver/hw_timer.h"
-
-#include "esp_log.h"
-#include "esp_system.h"
-#include "esp_wifi.h"
-#include "esp_event_loop.h"
-#include "esp_err.h"
-#include "esp_ota_ops.h"
-
-#include "nvs.h"
-#include "nvs_flash.h"
-
 #include "onewire.h"     
-#include "ds18b20.h"     
-//
-
+#include <math.h>
+#include <netdb.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 
-#include "esp_system.h"
-#include "esp_wifi.h"
+#include "driver/gpio.h"
+#include "driver/hw_timer.h"
+#include "driver/i2c.h"
+#include "ds18b20.h"     
+#include "esp_err.h"
 #include "esp_event_loop.h"
 #include "esp_log.h"
-#include "nvs_flash.h"
-
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
+#include "esp_ota_ops.h"
+#include "esp_system.h"
+#include "esp_wifi.h"
 #include "freertos/event_groups.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "freertos/task.h"
+#include "nvs_flash.h"
+#include "nvs.h"
 
 // mqtt
 #include "MQTTClient.h"
@@ -105,5 +88,10 @@ int connect_to_server(const char *server, const char *port, const char *url);
 int read_next_data(int socket_id, char *body_data, bool body_flag);
 int read_until(char*, char, int);
 int read_past_http_header(char[], int, char*);
+void blink_led(uint8_t, uint16_t, uint8_t);
+void blink_green();
+void blink_red();
+void blink_green_multiply(uint8_t);
+void blink_red_multiply(uint8_t);
 
 #endif

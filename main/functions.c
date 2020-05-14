@@ -77,7 +77,7 @@ uint16_t check_ota_version(const char *server, const char *port)
         ESP_LOGI("VERSION", "Connected to http server");
     } else {
         ESP_LOGE("VERSION", "Connect to http server failed!");
-        //blink_red_multiply(4);
+        blink_red_multiply(4);
         return 0;
     }
 
@@ -92,7 +92,7 @@ uint16_t check_ota_version(const char *server, const char *port)
         int read_len = read_next_data(socket_id, buffer, body_flag);
         if (read_len == -2) {
 			ESP_LOGE("VERSION", "FAILED!");
-			//blink_red_multiply(4);
+			blink_red_multiply(4);
 			break;
 		}
 		if (body_flag && read_len == 0) {
@@ -103,7 +103,7 @@ uint16_t check_ota_version(const char *server, const char *port)
 			if (read_len > version_len_remain) {
 				memset(version, 0, OTA_VERSION_LEN+1);
 				ESP_LOGE("VERSION", "FAILED!");
-				//blink_red_multiply(4);
+				blink_red_multiply(4);
 				break;
 			}
 			memcpy(version+(OTA_VERSION_LEN-version_len_remain), buffer, read_len);
@@ -155,7 +155,7 @@ void do_ota(const char *server, const char *port, uint16_t actual_version)
         ESP_LOGI("OTA", "Connected to http server");
     } else {
         ESP_LOGE("OTA", "Connect to http server failed!");
-        //blink_red_multiply(4);
+        blink_red_multiply(4);
 		return;
     }
 
@@ -180,7 +180,7 @@ void do_ota(const char *server, const char *port, uint16_t actual_version)
         int write_len = read_next_data(socket_id, ota_write_data, body_flag);
         if (write_len == -2) {
 			ESP_LOGE("OTA", "OTA FAILED! Prepare to restart system!");
-			//blink_red_multiply(4);
+			blink_red_multiply(4);
 			esp_restart();
 			return;
 		}
@@ -200,7 +200,7 @@ void do_ota(const char *server, const char *port, uint16_t actual_version)
 			
 			
 			ESP_LOGI("OTA", "Prepare to restart system!");
-			//blink_green_multiply(4);
+			blink_green_multiply(4);
 			esp_restart();
 			return ;
 		}
@@ -208,7 +208,7 @@ void do_ota(const char *server, const char *port, uint16_t actual_version)
 			err = esp_ota_write(update_handle, (const void *)ota_write_data, write_len);
 			if (err != ESP_OK) {
 				ESP_LOGE("OTA", "Error: esp_ota_write failed! err=0x%x", err);
-				//blink_red_multiply(4);
+				blink_red_multiply(4);
 				esp_restart();
 				return;
 			} else {
@@ -321,4 +321,34 @@ int read_past_http_header(char text[], int total_len, char *http_data)
         i += i_read_len;
     }
     return -1;
+}
+
+void blink_led(uint8_t led_pin, uint16_t delay, uint8_t multiply)
+{
+	for (uint8_t i=0; i<multiply; i++) {
+		gpio_set_level(led_pin, 1);
+		vTaskDelay(delay/portTICK_RATE_MS);
+		gpio_set_level(led_pin, 0);
+		vTaskDelay(delay/portTICK_RATE_MS);
+	}
+}
+
+void blink_green()
+{
+	blink_led(LED_GRN_PIN, 100, 1);
+}
+
+void blink_red()
+{
+	blink_led(LED_RED_PIN, 100, 1);
+}
+
+void blink_green_multiply(uint8_t multiply)
+{
+	blink_led(LED_GRN_PIN, 50, multiply);
+}
+
+void blink_red_multiply(uint8_t multiply)
+{
+	blink_led(LED_RED_PIN, 50, multiply);
 }

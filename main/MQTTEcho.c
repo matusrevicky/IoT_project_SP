@@ -13,57 +13,39 @@
  * Contributors:
  *    Ian Craggs - initial API and implementation and/or initial documentation
  *******************************************************************************/
-
+ 
+#include <math.h>
+#include <netdb.h>
 #include <stddef.h>
 #include <stdio.h>
-#include <string.h>
-
-#include "esp_system.h"
-#include "esp_wifi.h"
-#include "esp_event_loop.h"
-#include "esp_log.h"
-#include "nvs_flash.h"
-
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/event_groups.h"
-
-#include "MQTTClient.h"
-#include "esp_ota_ops.h"
-
-////
-#include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/socket.h>
-#include <netdb.h>
-#include <math.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/queue.h"
-#include "freertos/event_groups.h"
 
 #include "driver/gpio.h"
-#include "driver/i2c.h"
 #include "driver/hw_timer.h"
-
+#include "driver/i2c.h"
+#include "esp_err.h"
+#include "esp_event_loop.h"
 #include "esp_log.h"
+#include "esp_ota_ops.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
-#include "esp_event_loop.h"
-#include "esp_err.h"
-
-#include "nvs.h"
+#include "freertos/event_groups.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "freertos/task.h"
+#include "MQTTClient.h"
 #include "nvs_flash.h"
-
-////
+#include "nvs.h"
 
 #include "functions.h"
+
 
 #define CONF_OTA_SERVER_IP      CONFIG_MODULE_OTA_SERVER_IP
 #define CONF_OTA_SERVER_PORT    CONFIG_MODULE_OTA_SERVER_PORT
 
-#define ACTUAL_FW_VERSION        6
+#define ACTUAL_FW_VERSION        8
 #define OTA_LOOP_COUNT          90
 
 /* FreeRTOS event group to signal when we are connected & ready to make a request */
@@ -408,6 +390,12 @@ void app_main(void)
 {
 
     initialize_led_gpio();
+    for (uint8_t x = 0; x < 4; x++)
+    {
+        blink_red();
+        blink_green();
+    }
+
     initialize_watersensor_adc();
     initialize_fotosensor_gpio();
     dht_init(DHT_GPIO, true);
