@@ -1,13 +1,17 @@
 # Software programming final project
 
-## 1. Introduction
+## 1. Smart greenhouse
+
+The main idea was to create smart greenhouse that can be remotely monitored and upgraded.
+Greenhouse is able to measure air humidity, air temperature, light and soil moisture. All of aforementioned is send via MQTT broker to vizualization tool [IoT MQTT Panel](https://play.google.com/store/apps/details?id=snr.lab.iotmqttpanel.prod&hl=sk). Based on temperature and light servo controls hatch (open during day when is hot, closed during night). It is possible to switch light on and off remotely using MQTT protocol.
+It is possible to perform OTA updates using HTTP protocol. 
 
 This project features fully functional ESP8266 MQTT Client together with 
-* DHT11 (humidity and temperature sensor), 
+* DHT11 (humidity and temperature sensor),
 * Remote control of LED diode HLMP-4000-002, 
 * Servo SG90 (using PWM), 
-* Water sensor (using adc)
-* Photoresistor PGM5526
+* Water sensor (using adc),
+* Photoresistor PGM5526,
 * 2x resistor 270R 
 
 Pins used:
