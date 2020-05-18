@@ -2,9 +2,7 @@
 
 ## 1. Smart greenhouse
 
-The main idea was to create smart greenhouse that can be remotely monitored and upgraded.
-Greenhouse is able to measure air humidity, air temperature, light and soil moisture. All of aforementioned is send via MQTT broker to vizualization tool [IoT MQTT Panel](https://play.google.com/store/apps/details?id=snr.lab.iotmqttpanel.prod&hl=sk). Based on temperature and light servo controls hatch (open during day when is hot, closed during night). It is possible to switch light on and off remotely using MQTT protocol.
-It is possible to perform OTA updates using HTTP protocol. 
+The main idea was to create a smart greenhouse that can be remotely monitored and upgraded. The smart greenhouse is able to measure air humidity, air temperature, light, and soil moisture. All of the aforementioned is send via MQTT broker to visualization tool IoT MQTT Panel. Based on temperature and light servo controls hatch (open during the day when is hot, closed during night). It is possible to switch the light on and off remotely using MQTT protocol. It is possible to perform OTA updates using HTTP protocol.
 
 This project features fully functional ESP8266 MQTT Client together with 
 * DHT11 (humidity and temperature sensor),
